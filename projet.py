@@ -185,9 +185,10 @@ elif page == "Recherche de Films":
         time = 1 if st.session_state.time == 1 else -1
         films_time = films.sort("Runtime (Minutes)", time)
 
+    # Place dans une liste la recherche du film avec l'état des deux bouton 'Film court' et 'Film long'
     films_list = list(films_time)
     if len(films_list) > 0:
-        st.subheader(f"Films de l'année {selected_year}")
+        st.subheader(f"Films de l'année {selected_year} : {len(films_list)} films trouvés")
         for film in films_list:
             st.write(f"Nom du Film : {film["title"]}")
             st.write(f"Genre du Film : {', '.join(film['genre'])}")
@@ -231,7 +232,7 @@ elif page == "Analyse":
     # Première Partie : les meilleurs revenue en fonction du genre et de l'année
 
     st.title("Analyse des différents documents dans Movies")
-    st.subheader("Les Films avec les meilleurs Revenue en fonction du Genre par Année")
+    st.subheader("Les Films avec les meilleurs Revenues en fonction du Genre par Année")
     
     # Trie par ordre Alphabétique les genres distinct extrait des élements individuels dans result via '_id'
     genre = sorted([r['_id'] for r in result])
@@ -241,23 +242,29 @@ elif page == "Analyse":
     stats = list(db.utilisateurs.find({"genre": {"$all": selected_genre, "$exists": True}, "year": {"$exists": True}, "Revenue (Millions)": {"$nin" : ["NA", "Node", ""], "$exists" : True }}))
     
     genre_year_revenue_data = [(genre, x["year"], x.get("Revenue (Millions)", "")) for x in stats for genre in x["genre"]]
-    st.write(genre_year_revenue_data)
     
     df = pd.DataFrame(genre_year_revenue_data, columns=["Genre", "Année", "Revenue"])
     df["Revenue"] = pd.to_numeric(df["Revenue"], errors="coerce")
-    df = df.dropna(subset=["Revenue"])
 
     if selected_genre:
         df = df[df["Genre"].isin(selected_genre)]
     
-    # Calcule de la médiane des revenues des documents par genre et année
     df_resultat = df.groupby(["Année", "Genre"]).agg(median_revenue = pd.NamedAgg(column="Revenue", aggfunc="median")).reset_index()
-    
+    # Fusion des genres dans le cas de la sélection de plusieurs genres
+    df_resultat["Genres"] = df_resultat.groupby("Année")["Genre"].transform(lambda x: ', '.join(sorted(x.unique()))) 
     # Avoir l'année comme index et les genres comme colonnes
-    df_ordre = df_resultat.pivot_table(index="Année", columns="Genre", values="median_revenue", aggfunc="median")
+    df_ordre = df_resultat.pivot_table(index="Année", columns="Genres", values="median_revenue", aggfunc="median")
+    
+    # Correction de l'affichage des Années : 2016 au lieu de 2,016.0
+    df_ordre.index = df_ordre.index.astype(str)
+    # Correction de l'affichage des Années de verticale à horizontale
+    
 
-    st.write(df_ordre)
+    # Affichage du graphique
     st.line_chart(df_ordre)
+    # Affichage du tableau
+    st.write("Observation des Résultats")
+    st.write(df_ordre)
 
 ###################### Deuxième Partie : Relation entre la Durée des Film et leur revenue #############
 
