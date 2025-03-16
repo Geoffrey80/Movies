@@ -171,6 +171,8 @@ elif page == "Recherche de Films":
         films = db.utilisateurs.find({"year": selected_year, "genre": {"$all": selected_genre}})
     elif selected_year == "Tous" and selected_genre :
         films = db.utilisateurs.find({"genre": {"$all": selected_genre}})
+    elif selected_year != "Tous":
+        films = db.utilisateurs.find({"year": selected_year})
     else:
         films = db.utilisateurs.find()
 
@@ -257,7 +259,7 @@ elif page == "Analyse":
     st.write(df_ordre)
     st.line_chart(df_ordre)
 
-    # Deuxième Partie : Relation entre la Durée des Film et leur revenue
+###################### Deuxième Partie : Relation entre la Durée des Film et leur revenue #############
 
     st.title("Relation entre la Durée des Films et le Revenue")
     st.subheader("Relation entre la Durée des Films et leur Revenu")
