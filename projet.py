@@ -6,6 +6,7 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 # Librairie pour intéragir avec MongoDB
 import pymongo
+import plotly.express as px
 import pandas as pd
 import numpy as np
 
@@ -101,6 +102,27 @@ elif page == "Recherche de Films":
     genre = sorted([r['_id'] for r in result])
     # Sélection déroulante des types de genres à choix multiples
     selected_genre = st.multiselect("Sélectionne un ou plusieurs genres :", genre)
+    
+    def verification_saisie(nombre):
+        try:
+            float(nombre)
+            return True
+        except ValueError:
+            st.error("Veuillez saisir un nombre valide.")
+            return False
+
+    rang_minimun = st.number_input("Entrez le rang minimun du film :")
+    revenue_minimun = st.number_input("Entrez le revenue minimun du film :")
+    
+    if verification_saisie(rang_minimun):
+        st.write(f"Le rang minimun des films est {rang_minimun}.")
+    else:
+        st.write(f"Le rang minimun des films {rang_minimun} est erroné.")
+
+    if verification_saisie(revenue_minimun):
+        st.write(f"Le revenue minimun des films est {revenue_minimun}.")
+    else:
+        st.write(f"Le revenue minimun des films {revenue_minimun} est non conforme.")
 
     # Vérifie si la clé "time" n'existe pas déjà dans l'état de la session
     if "time" not in st.session_state:
@@ -166,11 +188,31 @@ elif page == "Recherche de Films":
                 st.session_state.time = -1 # Définit time a 1 pour les films longs
                 st.session_state.click = "long" # Marque le bouton 'Film long' activé, bouton = on
 
-    # Trie les films par années et genre | si le genre choisit 'Tous' traiter que l'année
-    if selected_year != "Tous" and selected_genre :
+    # Trie les films par années et genre et rang et revenue | option "Tous" signifie prendre tous les films disponible sans les années
+    if selected_year != "Tous" and selected_genre and rang_minimun and revenue_minimun:
+        films = db.utilisateurs.find({"year": selected_year, "genre": {"$all": selected_genre}, "Metascore": {"$gt" : rang_minimun, "$nin" : ["NA", "None", ""]}, "Revenue (Millions)": {"$gt": revenue_minimun, "$nin" : ["NA", "None", ""]}})
+    elif selected_year != "Tous" and rang_minimun and revenue_minimun:
+        films = db.utilisateurs.find({"year": selected_year, "Metascore": {"$gt" : rang_minimun, "$nin" : ["NA", "None", ""]}, "Revenue (Millions)": {"$gt": revenue_minimun, "$nin" : ["NA", "None", ""]}})
+    elif selected_year != "Tous" and selected_genre and rang_minimun:
+        films = db.utilisateurs.find({"year": selected_year, "genre": {"$all": selected_genre}, "Metascore": {"$gte" : rang_minimun, "$nin" : ["NA", "None", ""]}})
+    elif selected_year != "Tous" and selected_genre and revenue_minimun:
+        films = db.utilisateurs.find({"year": selected_year, "genre": {"$all": selected_genre}, "Metascore": {"$gte" : revenue_minimun, "$nin" : ["NA", "None", ""]}})
+    elif selected_year != "Tous" and selected_genre:
         films = db.utilisateurs.find({"year": selected_year, "genre": {"$all": selected_genre}})
-    elif selected_year == "Tous" and selected_genre :
+    elif selected_year != "Tous" and rang_minimun:
+        films = db.utilisateurs.find({"year": selected_year, "Metascore": {"$gte" : rang_minimun, "$nin" : ["NA", "None", ""]}})
+    elif selected_year == "Tous" and revenue_minimun:
+        films = db.utilisateurs.find({"year": selected_year, "Revenue (Millions)": {"$gte" : revenue_minimun, "$nin" : ["NA", "None", ""]}})
+    elif selected_year == "Tous" and selected_genre and rang_minimun:
+        films = db.utilisateurs.find({"genre": {"$all": selected_genre}, "Metascore": {"$gte" : rang_minimun, "$nin" : ["NA", "None", ""]}})
+    elif selected_year == "Tous" and selected_genre and revenue_minimun:
+        films = db.utilisateurs.find({"genre": {"$all": selected_genre}, "Revenue (Millions)": {"$gte" : revenue_minimun, "$nin" : ["NA", "None", ""]}})
+    elif selected_year == "Tous" and selected_genre:
         films = db.utilisateurs.find({"genre": {"$all": selected_genre}})
+    elif selected_year == "Tous" and rang_minimun:
+        films = db.utilisateurs.find({"Metascore": {"$gte" : rang_minimun, "$nin" : ["NA", "None", ""]}})
+    elif selected_year == "Tous" and revenue_minimun:
+        films = db.utilisateurs.find({"Revenue (Millions)": {"$gte" : revenue_minimun, "$nin" : ["NA", "None", ""]}})
     elif selected_year != "Tous":
         films = db.utilisateurs.find({"year": selected_year})
     else:
@@ -193,10 +235,13 @@ elif page == "Recherche de Films":
             st.write(f"Nom du Film : {film["title"]}")
             st.write(f"Genre du Film : {', '.join(film['genre'])}")
             st.write(f"Réalisateur : {film["Director"]}")
+            if "Metascore" in film and film["Metascore"] not in ["NA", None, ""]:
+                st.write(f"Classement : {film["Metascore"]}")
             st.write(f"Synopsis : {film["Description"]}")
             if "Revenue (Millions)" in film and film["Revenue (Millions)"] not in ["NA", None, ""]:
                 st.write(f"Revenue : {film["Revenue (Millions)"]}")
             st.write(f"Durée : {film["Runtime (Minutes)"]}")
+            st.write(f"Année : {film["year"]}")
             st.markdown("<hr style='border: 1px solid #CCCCCC;'>", unsafe_allow_html=True)        
     else:
         st.write("Aucun film trouvé pour cette année.")
@@ -263,51 +308,55 @@ elif page == "Analyse":
     # Affichage du graphique
     st.line_chart(df_ordre)
     # Affichage du tableau
-    st.write("Observation des Résultats")
+    st.write("Observation des Résultats: Les revenus sont exprimés en millions de dollars américains.")
     st.write(df_ordre)
+    st.markdown("<hr style='border: 1px solid #CCCCCC;'>", unsafe_allow_html=True)
 
-###################### Deuxième Partie : Relation entre la Durée des Film et leur revenue #############
+###################### Deuxième Partie : Relation entre la Durée des Film et leur revenue ###############
 
-    st.title("Relation entre la Durée des Films et le Revenue")
-    st.subheader("Relation entre la Durée des Films et leur Revenu")
+    st.subheader("Les Revenues  en fonction de la Durée du Film")
+    stats_duree = list(db.utilisateurs.find({"Runtime (Minutes)": {"$exists": True}, "Revenue (Millions)": {"$nin": ["NA", "Node", ""], "$exists" : True}}))
+    revenue_duree = [(x["Runtime (Minutes)"], x.get("Revenue (Millions)", "")) for x in stats_duree]
 
-    # Récupérer les films filtrés par genre et ayant des informations sur la durée et le revenu
-    stats = list(db.utilisateurs.find({
-        "Revenue (Millions)": {"$nin": ["NA", "Node", ""], "$exists": True},
-        "Duration (Minutes)": {"$exists": True}
-    }))
+    df_2 = pd.DataFrame(revenue_duree, columns = ["Duree", "Revenue"])
+    df_2["Duree"]= pd.to_numeric(df_2["Duree"], errors="coerce")
+    df_2["Revenue"]= pd.to_numeric(df_2["Revenue"], errors="coerce")
+    
+    df_result = df_2.groupby(["Duree"]).agg(median_revenues = pd.NamedAgg(column="Revenue", aggfunc="median")).reset_index()
+    
+    def convertir_minutes_en_HeureMinute(minutes):
+        heures = minutes // 60
+        mins = minutes % 60
+        return f"{heures}h {mins}m"
 
-    # Extraire les données nécessaires (durée et revenu)
-    duration_revenue_data = [(x.get("Duration (Minutes)", ""), x.get("Revenue (Millions)", ""))
-                             for x in stats if x.get("Duration (Minutes)", "") != "" and x.get("Revenue (Millions)", "") != ""]
+    df_result["Duree_hm"] = df_result["Duree"].apply(convertir_minutes_en_HeureMinute) 
 
-    # Créer un DataFrame avec les données
-    df_duration_revenue = pd.DataFrame(duration_revenue_data, columns=["Duration", "Revenue"])
+    st.line_chart(df_result.set_index("Duree")["median_revenues"])
+    st.write("Observation des Résultats: Les revenus sont exprimés en millions de dollars américains.")
+    st.dataframe(df_result[["Duree_hm", "median_revenues"]].set_index("Duree_hm"))
 
-    # Vérifier les données extraites
-    st.write("### Aperçu des données extraites pour la durée et le revenu :")
-    st.write(df_duration_revenue.head())  # Affichage des premières lignes pour débogage
+############ Troisième partie : Relation entre la moyenne de durée et les film par année ###########
 
-    # Convertir la colonne 'Revenue' et 'Duration' en numérique et gérer les erreurs
-    df_duration_revenue["Revenue"] = pd.to_numeric(df_duration_revenue["Revenue"], errors="coerce")
-    df_duration_revenue["Duration"] = pd.to_numeric(df_duration_revenue["Duration"], errors="coerce")
+    st.subheader("L'évolution de la durée moyenne des films par décennie")
+    stats_evolution = list(db.utilisateurs.find({"year": {"$exists": True}, "Runtime (Minutes)": {"$exists": True}}))
+    evolution_year = [(x["year"], x.get("Runtime (Minutes)", "")) for x in stats_evolution]
 
-    # Filtrer les données pour éliminer les lignes avec des valeurs manquantes
-    df_duration_revenue = df_duration_revenue.dropna(subset=["Revenue", "Duration"])
+    df_3 = pd.DataFrame(evolution_year, columns = ["year", "Duree"])
+    df_3["Duree"] = pd.to_numeric(df_3["Duree"], errors="coerce")
+    df_3["decennie"] = (df_3["year"] // 10) * 10 
+    df_evolution = df_3.groupby(["decennie"]).agg(median_duree= pd.NamedAgg(column="Duree", aggfunc='median')).reset_index()
+    
+    st.line_chart(df_evolution.set_index("decennie")["median_duree"])
+    df_pie_duree = df_3.groupby("decennie")["Duree"].median().reset_index()
 
-    # Vérifier après le filtrage
-    st.write("### Données après le filtrage des valeurs manquantes :")
-    st.write(df_duration_revenue.head())  # Affichage pour débogage
+    # Utiliser la fonction de conversion pour afficher la durée en heures et minutes
+    df_pie_duree["Duree_hm"] = df_pie_duree["Duree"].apply(convertir_minutes_en_HeureMinute)
 
-    # Regrouper les données par durée et calculer la médiane des revenus pour chaque durée
-    df_duration_revenue_aggregated = df_duration_revenue.groupby("Duration").agg(
-        median_revenue=pd.NamedAgg(column="Revenue", aggfunc="median")
-    ).reset_index()
+    # Renommer la colonne "Duree" en "median_duree" pour que cela corresponde dans le graphique
+    df_pie_duree = df_pie_duree.rename(columns={"Duree": "median_duree"})
 
-    # Vérifier les données agrégées avant l'affichage
-    st.write("### Données agrégées pour la relation Durée vs Revenu :")
-    st.write(df_duration_revenue_aggregated.head())  # Affichage pour débogage
+    # Création du camembert avec Plotly
+    fig = px.pie(df_pie_duree, names="decennie", values="median_duree", title="Répartition des films par Décennie", hover_data=["Duree_hm"])
 
-    # Utiliser le graphique de dispersion de Streamlit pour afficher la relation entre durée et revenu
-    st.write("### Relation entre la Durée des Films et leur Revenu (Médiane)")
-    st.scatter_chart(df_duration_revenue_aggregated.set_index("Duration"))
+    # Affichage du camembert dans Streamlit
+    st.plotly_chart(fig)
