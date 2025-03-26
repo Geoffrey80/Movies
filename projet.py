@@ -69,6 +69,11 @@ new_genre = [{"$unwind": "$genre"},
 # c.a.d : "Elle fait une lecture d'analyse des documents" à prendre avec des pincettes
 result = db.utilisateurs.aggregate(new_genre)
 
+# Ajout du nom et du logo du site dans la barre d'onglet
+# Empêche la barre menu de s'ouvrir lorsqu'on accède au site
+# Ajuste la longueur des textes sur les pages pour éviter un retour à la ligne trop rapide
+st.set_page_config(page_title="Movies", page_icon=":clapper:", layout="wide", initial_sidebar_state="collapsed")
+
 # Menu de pages à gauche de l'application
 with st.sidebar:
     page = option_menu(
@@ -77,13 +82,41 @@ with st.sidebar:
             # Les noms des pages
             options=["Accueil", "Recherche de Films", "Classement", "Analyse"],
             # Les icones à gauches des noms des pages
-            icons=["globe", "film", "trophy", "bar-chart-line"])
+            icons=["globe", "film", "trophy", "bar-chart-line"],
+            # Page par default Accueil
+            default_index=0)
 
 # Traitement de la page Accueil
 if page == "Accueil":
-    st.title("Bienvenue dans l'application Movies Stars")
-    st.write("Une application pour rechercher vos films de votre base de donnée Mongodb")
-    st.write("Vous pourrez parcourir l'ensemble des informations avec une analyse concrète de l'ensemble des informations")
+    st.markdown(
+    """
+    <style>
+    /* Appliquer un fond en dégradé pour un effet cinéma */
+    .stApp {
+        background: #1a1a1a;
+        color: white;
+        height: 100vh;
+        text-align: center;
+        white-space: nowrap;
+    }
+    /* Supprimer l'ombre du header pour un look plus propre */
+    header[data-testid="stHeader"]::before {
+        content: "";
+        background: black;
+        height: 100%;
+        width: 100%;
+        position: absolute;
+        top: 0;
+        left: 0;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True)
+    st.title("Show Movies")
+    st.write("🎬 Bienvenue dans l'univers du cinémasrduygubiokpl,jfoiboubfip    ezf$opnfzegnoezgnzeofnezonzoznfoiznoifnzo")
+    st.write("Profitez d'une interface immersive avec une visualisation des données cinéma ! 🍿")
+
+
 
 # Traitement de la page Recherche de Films
 elif page == "Recherche de Films":
@@ -111,8 +144,8 @@ elif page == "Recherche de Films":
             st.error("Veuillez saisir un nombre valide.")
             return False
 
-    rang_minimun = st.number_input("Entrez le rang minimun du film :")
-    revenue_minimun = st.number_input("Entrez le revenue minimun du film :")
+    rang_minimun = st.number_input("Entrez le rang minimun du film [0-100]:")
+    revenue_minimun = st.number_input("Entrez le revenue minimun du film [0 - 1000] :")
     
     if verification_saisie(rang_minimun):
         st.write(f"Le rang minimun des films est {rang_minimun}.")
@@ -196,23 +229,29 @@ elif page == "Recherche de Films":
     elif selected_year != "Tous" and selected_genre and rang_minimun:
         films = db.utilisateurs.find({"year": selected_year, "genre": {"$all": selected_genre}, "Metascore": {"$gte" : rang_minimun, "$nin" : ["NA", "None", ""]}})
     elif selected_year != "Tous" and selected_genre and revenue_minimun:
-        films = db.utilisateurs.find({"year": selected_year, "genre": {"$all": selected_genre}, "Metascore": {"$gte" : revenue_minimun, "$nin" : ["NA", "None", ""]}})
+        films = db.utilisateurs.find({"year": selected_year, "genre": {"$all": selected_genre}, "Revenue (Millions)": {"$gte" : revenue_minimun, "$nin" : ["NA", "None", ""]}})
     elif selected_year != "Tous" and selected_genre:
         films = db.utilisateurs.find({"year": selected_year, "genre": {"$all": selected_genre}})
+    elif selected_year != "Tous" and rang_minimun and  revenue_minimun:
+        films = db.distributions.film({"year": selected_year, "Revenue (Millions)": {"gte" : revenue_minimun, "$nin": ["NA", "None", ""]}, "Metascore": {"$gte": rang_minimun, "$nin": ["NA", "None", ""]}})
     elif selected_year != "Tous" and rang_minimun:
         films = db.utilisateurs.find({"year": selected_year, "Metascore": {"$gte" : rang_minimun, "$nin" : ["NA", "None", ""]}})
-    elif selected_year == "Tous" and revenue_minimun:
+    elif selected_year != "Tous" and revenue_minimun:
         films = db.utilisateurs.find({"year": selected_year, "Revenue (Millions)": {"$gte" : revenue_minimun, "$nin" : ["NA", "None", ""]}})
+    elif selected_year == "Tous" and selected_genre and rang_minimun and revenue_minimun:
+        films = db.utilisateurs.find({"genre": {"$all": selected_genre}, "Metascore": {"$gte" : rang_minimun, "$nin" : ["NA", "None", ""]}, "Revenue (Millions)": {"$gte" : revenue_minimun, "$nin" : ["NA", "None", ""]}})
     elif selected_year == "Tous" and selected_genre and rang_minimun:
         films = db.utilisateurs.find({"genre": {"$all": selected_genre}, "Metascore": {"$gte" : rang_minimun, "$nin" : ["NA", "None", ""]}})
     elif selected_year == "Tous" and selected_genre and revenue_minimun:
         films = db.utilisateurs.find({"genre": {"$all": selected_genre}, "Revenue (Millions)": {"$gte" : revenue_minimun, "$nin" : ["NA", "None", ""]}})
+    elif selected_year == "Tous" and rang_minimun and revenue_minimun:
+        films = db.utilisateurs.find({"Metascore": {"$gt" : rang_minimun, "$nin" : ["NA", "None", ""]}, "Revenue (Millions)": {"$gt": revenue_minimun, "$nin" : ["NA", "None", ""]}}) 
     elif selected_year == "Tous" and selected_genre:
         films = db.utilisateurs.find({"genre": {"$all": selected_genre}})
-    elif selected_year == "Tous" and rang_minimun:
-        films = db.utilisateurs.find({"Metascore": {"$gte" : rang_minimun, "$nin" : ["NA", "None", ""]}})
     elif selected_year == "Tous" and revenue_minimun:
         films = db.utilisateurs.find({"Revenue (Millions)": {"$gte" : revenue_minimun, "$nin" : ["NA", "None", ""]}})
+    elif selected_year == "Tous" and rang_minimun:
+        films = db.utilisateurs.find({"Metascore": {"$gte": rang_minimun, "$nin": ["NA", "None", ""]}})
     elif selected_year != "Tous":
         films = db.utilisateurs.find({"year": selected_year})
     else:
@@ -235,10 +274,10 @@ elif page == "Recherche de Films":
             st.write(f"Nom du Film : {film["title"]}")
             st.write(f"Genre du Film : {', '.join(film['genre'])}")
             st.write(f"Réalisateur : {film["Director"]}")
-            if "Metascore" in film and film["Metascore"] not in ["NA", None, ""]:
+            if "Metascore" in film and film["Metascore"] not in ["NA", "None", ""]:
                 st.write(f"Classement : {film["Metascore"]}")
             st.write(f"Synopsis : {film["Description"]}")
-            if "Revenue (Millions)" in film and film["Revenue (Millions)"] not in ["NA", None, ""]:
+            if "Revenue (Millions)" in film and film["Revenue (Millions)"] not in ["NA", "None", ""]:
                 st.write(f"Revenue : {film["Revenue (Millions)"]}")
             st.write(f"Durée : {film["Runtime (Minutes)"]}")
             st.write(f"Année : {film["year"]}")
@@ -302,8 +341,6 @@ elif page == "Analyse":
     
     # Correction de l'affichage des Années : 2016 au lieu de 2,016.0
     df_ordre.index = df_ordre.index.astype(str)
-    # Correction de l'affichage des Années de verticale à horizontale
-    
 
     # Affichage du graphique
     st.line_chart(df_ordre)
@@ -334,7 +371,7 @@ elif page == "Analyse":
     st.line_chart(df_result.set_index("Duree")["median_revenues"])
     st.write("Observation des Résultats: Les revenus sont exprimés en millions de dollars américains.")
     st.dataframe(df_result[["Duree_hm", "median_revenues"]].set_index("Duree_hm"))
-
+    st.markdown("<hr style='border: 1px solid #CCCCCC;'>", unsafe_allow_html=True)
 ############ Troisième partie : Relation entre la moyenne de durée et les film par année ###########
 
     st.subheader("L'évolution de la durée moyenne des films par décennie")
