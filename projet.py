@@ -92,82 +92,124 @@ with st.sidebar:
 
 # Traitement de la page Accueil
 if page == "Accueil":
-    
-    def create_collage(image_paths, width=250, height=350):
-        images = [Image.open(img).resize((width, height)) for img in image_paths[:12]]
-        final_width = width * 3 + 30
-        final_height = height * 4 + 40
-        collage = Image.new("RGB", (final_width, final_height), (0, 0, 0))
 
-        x_offset, y_offset = 10, 10
-        for i, img in enumerate(images):
-            col = i % 3
-            row = i // 3
-            x_random = random.randint(-10, 10)
-            y_random = random.randint(-10, 10)
-            x = col * (width + 10) + x_offset + x_random
-            y = row * (height + 10) + y_offset + y_random
-            collage.paste(img, (x, y))
-        
-        return collage
-    
-    def get_base64_from_image(image):
-        buffered = BytesIO()
-        image.save(buffered, format="JPEG")
-        return base64.b64encode(buffered.getvalue()).decode()
+    # Fonction pour encoder une image en base64
+    def get_base64_image(image_path):
+        with open(image_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode()
 
+    # Charger les images depuis le dossier
     image_paths = glob.glob("/home/guesdon/Documents/myprojet/cover/*.jpg")
+
+    # CSS Global pour la mise en page et le style
+    st.markdown(
+        """
+        <style>
+        /* Appliquer un fond sombre pour un effet cinéma */
+        .stApp {
+            background: #1a1a1a;
+            color: white;
+            text-align: center;
+        }
+        /* Supprimer l'ombre du header pour un look plus propre */
+        header[data-testid="stHeader"]::before {
+            content: "";
+            background: black;
+            height: 100%;
+            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Premier bloc : Titre et Introduction
+    st.markdown(
+        """
+        <div class="header">
+            <h1>🎬 Bienvenue sur Movies Data Visualization</h1>
+            <p>Explorez et analysez les films à travers des données interactives issues de MongoDB et Neo4j. 
+            Découvrez les tendances du box-office, les classements, les genres les plus populaires et bien plus encore !</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Deuxième bloc : Galerie d'images (Affiches de films)
     if len(image_paths) >= 12:
-        collage_image = create_collage(image_paths)
-        base64_image = get_base64_from_image(collage_image)
-    st.markdown(
-    """
-    <style>
-    /* Appliquer un fond en dégradé pour un effet cinéma */
-    .stApp {
-        background: #1a1a1a;
-        color: white;
-        height: 100vh;
-        text-align: center;
-        white-space: nowrap;
-    }
-    /* Supprimer l'ombre du header pour un look plus propre */
-    header[data-testid="stHeader"]::before {
-        content: "";
-        background: black;
-        height: 100%;
-        width: 100%;
-        position: absolute;
-        top: 0;
-        left: 0;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True)
-    
-    # Premier bloc (Titre et Introduction)
-    st.markdown(
-    """
-    <div class="header">
-        <h1>🎬 Bienvenue sur Movies Data Visualization</h1>
-        <p>Explorez et analysez les films à travers des données interactives issues de MongoDB et Neo4j. 
-        Découvrez les tendances du box-office, les classements, les genres les plus populaires et bien plus encore !</p>
-    </div>
-    """,
-    unsafe_allow_html=True)
+        selected_images = image_paths[:12]  # Sélection des 12 premières images
+        image_base64_list = [get_base64_image(img) for img in selected_images]
 
-    # Deuxième bloc (Affiches + Texte explicatif)
-    st.markdown(
-    """
-    <style>
-    .stApp {{
-        background: url('data:image/jpg;base64,{base64_image}') no-repeat center center fixed;
-        background-size: cover;
-    }}
-    </style>
-    """,
-    unsafe_allow_html=True)
+        image_html = f"""
+        <style>
+            .gallery {
+                display: flex;
+                justify-content: center;
+                gap: 20px;
+                margin-top: 30px;
+            }
+            .column {
+                display: flex;
+                flex-direction: column;
+                gap: 15px;
+            }
+            .column img {
+                width: 200px;
+                height: auto;
+                border-radius: 10px;
+                box-shadow: 3px 3px 10px rgba(0, 0, 0, 0.5);
+                transform: rotate(var(--rotation));
+                transition: transform 0.3s ease;
+            }
+            .column img:hover {
+                transform: scale(1.05);
+            }
+            /* Effet de rotation aléatoire */
+            .column img:nth-child(odd) { --rotation: -5deg; }
+            .column img:nth-child(even) { --rotation: 5deg; }
+        </style>
 
+        <div class="gallery">
+             <div class="column1">
+                <img src="data:image/jpg;base64,{image_base64_list[0]}">
+                <img src="data:image/jpg;base64,{image_base64_list[1]}">
+                <img src="data:image/jpg;base64,{image_base64_list[2]}">
+                <img src="data:image/jpg;base64,{image_base64_list[3]}">
+            </div>
+            <div class="column2">
+                <img src="data:image/jpg;base64,{image_base64_list[4]}">
+                <img src="data:image/jpg;base64,{image_base64_list[5]}">
+                <img src="data:image/jpg;base64,{image_base64_list[6]}">
+                <img src="data:image/jpg;base64,{image_base64_list[7]}">
+            </div>
+            <div class="column3">
+                <img src="data:image/jpg;base64,{image_base64_list[8]}">
+                <img src="data:image/jpg;base64,{image_base64_list[9]}">
+                <img src="data:image/jpg;base64,{image_base64_list[10]}">
+                <img src="data:image/jpg;base64,{image_base64_list[11]}">
+            </div>
+        </div>
+        """
+
+        st.markdown(image_html, unsafe_allow_html=True)
+    else:
+        st.error("Pas assez d'images disponibles (minimum 12 requises).")
+
+    # Troisième bloc : Texte explicatif
+    st.markdown(
+        """
+        <div class="content">
+            <h2>À propos</h2>
+            <p>Notre plateforme vous permet d'explorer une vaste base de données de films grâce à MongoDB et d'effectuer 
+            des analyses relationnelles avancées avec Neo4j. Utilisez des filtres interactifs, des graphiques et des 
+            visualisations pour mieux comprendre l'industrie du cinéma.</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 # Traitement de la page Recherche de Films
 elif page == "Recherche de Films":
