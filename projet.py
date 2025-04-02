@@ -91,12 +91,12 @@ with st.sidebar:
             default_index=0)
 
 # Traitement de la page Accueil
-if page == "Accueil":
+def get_base64_image(image_path):
+    with open(image_path, "rb") as img_file:
+        return base64.b64encode(img_file.read()).decode()
 
-    # Fonction pour encoder une image en base64
-    def get_base64_image(image_path):
-        with open(image_path, "rb") as img_file:
-            return base64.b64encode(img_file.read()).decode()
+# Traitement de la page Accueil
+if page == "Accueil":
 
     # Charger les images depuis le dossier
     image_paths = glob.glob("/home/guesdon/Documents/myprojet/cover/*.jpg")
@@ -107,7 +107,7 @@ if page == "Accueil":
         <style>
         /* Appliquer un fond sombre pour un effet cinéma */
         .stApp {
-            background: #1a1a1a;
+            background: #000000;
             color: white;
             text-align: center;
         }
@@ -121,6 +121,29 @@ if page == "Accueil":
             top: 0;
             left: 0;
         }
+        /* Galerie d'images */
+        .gallery {
+            display: flex;
+            justify-content: flex-start;
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .column {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .column img {
+            width: 200px;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 3px 3px 10px rgba(0, 0, 0, 0.5);
+            transform: rotate(var(--rotation));
+            transition: transform 0.3s ease;
+        }
+        .column img:hover {
+            transform: scale(1.05);
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -129,10 +152,16 @@ if page == "Accueil":
     # Premier bloc : Titre et Introduction
     st.markdown(
         """
-        <div class="header">
+        <div class="header" style="margin: 20px 30px;">
             <h1>🎬 Bienvenue sur Movies Data Visualization</h1>
-            <p>Explorez et analysez les films à travers des données interactives issues de MongoDB et Neo4j. 
-            Découvrez les tendances du box-office, les classements, les genres les plus populaires et bien plus encore !</p>
+            <p>
+            Dans ce projet, nous avons exploré et intégré deux systèmes de gestion de bases de données NoSQL : MongoDB, une base de données orientée document, et Neo4j,
+            une base de données orientée graphe. En développant une application Python interactive avec Streamlit, 
+            nous avons créé une interface permettant d’interagir facilement avec ces bases de données cloud.
+            L’application permet non seulement d’établir une connexion sécurisée avec MongoDB et Neo4j, mais aussi de réaliser des requêtes avancées pour récupérer, 
+            analyser et visualiser des données pertinentes. Que ce soit pour manipuler des documents avec MongoDB ou pour naviguer dans des graphes complexes avec Neo4j,
+            notre projet vous propose une solution complète et intuitive pour interroger et explorer ces systèmes de bases de données NoSQL. <br> 
+            <br>Explorez notre travail, découvrez les fonctionnalités de notre application et plongez dans l'univers des bases de données NoSQL !</p>
         </div>
         """,
         unsafe_allow_html=True
@@ -144,48 +173,20 @@ if page == "Accueil":
         image_base64_list = [get_base64_image(img) for img in selected_images]
 
         image_html = f"""
-        <style>
-            .gallery {
-                display: flex;
-                justify-content: center;
-                gap: 20px;
-                margin-top: 30px;
-            }
-            .column {
-                display: flex;
-                flex-direction: column;
-                gap: 15px;
-            }
-            .column img {
-                width: 200px;
-                height: auto;
-                border-radius: 10px;
-                box-shadow: 3px 3px 10px rgba(0, 0, 0, 0.5);
-                transform: rotate(var(--rotation));
-                transition: transform 0.3s ease;
-            }
-            .column img:hover {
-                transform: scale(1.05);
-            }
-            /* Effet de rotation aléatoire */
-            .column img:nth-child(odd) { --rotation: -5deg; }
-            .column img:nth-child(even) { --rotation: 5deg; }
-        </style>
-
         <div class="gallery">
-             <div class="column1">
+            <div class="column">
                 <img src="data:image/jpg;base64,{image_base64_list[0]}">
                 <img src="data:image/jpg;base64,{image_base64_list[1]}">
                 <img src="data:image/jpg;base64,{image_base64_list[2]}">
                 <img src="data:image/jpg;base64,{image_base64_list[3]}">
             </div>
-            <div class="column2">
+            <div class="column">
                 <img src="data:image/jpg;base64,{image_base64_list[4]}">
                 <img src="data:image/jpg;base64,{image_base64_list[5]}">
                 <img src="data:image/jpg;base64,{image_base64_list[6]}">
                 <img src="data:image/jpg;base64,{image_base64_list[7]}">
             </div>
-            <div class="column3">
+            <div class="column">
                 <img src="data:image/jpg;base64,{image_base64_list[8]}">
                 <img src="data:image/jpg;base64,{image_base64_list[9]}">
                 <img src="data:image/jpg;base64,{image_base64_list[10]}">
@@ -197,19 +198,6 @@ if page == "Accueil":
         st.markdown(image_html, unsafe_allow_html=True)
     else:
         st.error("Pas assez d'images disponibles (minimum 12 requises).")
-
-    # Troisième bloc : Texte explicatif
-    st.markdown(
-        """
-        <div class="content">
-            <h2>À propos</h2>
-            <p>Notre plateforme vous permet d'explorer une vaste base de données de films grâce à MongoDB et d'effectuer 
-            des analyses relationnelles avancées avec Neo4j. Utilisez des filtres interactifs, des graphiques et des 
-            visualisations pour mieux comprendre l'industrie du cinéma.</p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
 
 # Traitement de la page Recherche de Films
 elif page == "Recherche de Films":
