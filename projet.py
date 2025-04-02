@@ -100,18 +100,11 @@ if page == "Accueil":
 
     # Charger les images depuis le dossier
     image_paths = glob.glob("/home/guesdon/Documents/myprojet/cover/*.jpg")
-
+    background_base64 = get_base64_image("/home/guesdon/Documents/myprojet/background.jpg")
     # CSS Global pour la mise en page et le style
     st.markdown(
         """
         <style>
-        /* Appliquer un fond sombre pour un effet cinéma */
-        .stApp {
-            background: #000000;
-            color: white;
-            text-align: center;
-        }
-        /* Supprimer l'ombre du header pour un look plus propre */
         header[data-testid="stHeader"]::before {
             content: "";
             background: black;
@@ -121,7 +114,29 @@ if page == "Accueil":
             top: 0;
             left: 0;
         }
-        /* Galerie d'images */
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 100vh;
+        }
+        .section1 {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-image: url("{background_url}");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            padding: 50px;
+            color: white;
+        }
+        .section2 {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
         .gallery {
             display: flex;
             justify-content: flex-start;
@@ -152,17 +167,22 @@ if page == "Accueil":
     # Premier bloc : Titre et Introduction
     st.markdown(
         """
-        <div class="header" style="margin: 20px 30px;">
-            <h1>🎬 Bienvenue sur Movies Data Visualization</h1>
-            <p>
-            Dans ce projet, nous avons exploré et intégré deux systèmes de gestion de bases de données NoSQL : MongoDB, une base de données orientée document, et Neo4j,
-            une base de données orientée graphe. En développant une application Python interactive avec Streamlit, 
-            nous avons créé une interface permettant d’interagir facilement avec ces bases de données cloud.
-            L’application permet non seulement d’établir une connexion sécurisée avec MongoDB et Neo4j, mais aussi de réaliser des requêtes avancées pour récupérer, 
-            analyser et visualiser des données pertinentes. Que ce soit pour manipuler des documents avec MongoDB ou pour naviguer dans des graphes complexes avec Neo4j,
-            notre projet vous propose une solution complète et intuitive pour interroger et explorer ces systèmes de bases de données NoSQL. <br> 
-            <br>Explorez notre travail, découvrez les fonctionnalités de notre application et plongez dans l'univers des bases de données NoSQL !</p>
+        <div class="container">
+            <div class="secontion1"i>
+                <img src="data:image/jpg;base64,{background_base64}">
+                <h1>🎬 Bienvenue sur Movies Data Visualization</h1>
+                <p>
+                Dans ce projet, nous avons exploré et intégré deux systèmes de gestion de bases de données NoSQL : MongoDB, une base de données orientée document, et Neo4j,
+                une base de données orientée graphe. En développant une application Python interactive avec Streamlit, 
+                nous avons créé une interface permettant d’interagir facilement avec ces bases de données cloud.
+                L’application permet non seulement d’établir une connexion sécurisée avec MongoDB et Neo4j, mais aussi de réaliser des requêtes avancées pour récupérer, 
+                analyser et visualiser des données pertinentes. Que ce soit pour manipuler des documents avec MongoDB ou pour naviguer dans des graphes complexes avec Neo4j,
+                notre projet vous propose une solution complète et intuitive pour interroger et explorer ces systèmes de bases de données NoSQL. <br> 
+                <br>Explorez notre travail, découvrez les fonctionnalités de notre application et plongez dans l'univers des bases de données NoSQL !
+                </p>
+            </div>
         </div>
+
         """,
         unsafe_allow_html=True
     )
@@ -173,24 +193,28 @@ if page == "Accueil":
         image_base64_list = [get_base64_image(img) for img in selected_images]
 
         image_html = f"""
-        <div class="gallery">
-            <div class="column">
-                <img src="data:image/jpg;base64,{image_base64_list[0]}">
-                <img src="data:image/jpg;base64,{image_base64_list[1]}">
-                <img src="data:image/jpg;base64,{image_base64_list[2]}">
-                <img src="data:image/jpg;base64,{image_base64_list[3]}">
-            </div>
-            <div class="column">
-                <img src="data:image/jpg;base64,{image_base64_list[4]}">
-                <img src="data:image/jpg;base64,{image_base64_list[5]}">
-                <img src="data:image/jpg;base64,{image_base64_list[6]}">
-                <img src="data:image/jpg;base64,{image_base64_list[7]}">
-            </div>
-            <div class="column">
-                <img src="data:image/jpg;base64,{image_base64_list[8]}">
-                <img src="data:image/jpg;base64,{image_base64_list[9]}">
-                <img src="data:image/jpg;base64,{image_base64_list[10]}">
-                <img src="data:image/jpg;base64,{image_base64_list[11]}">
+        <div class="container">
+            <div class="section2">
+                <div class="gallery">
+                    <div class="column">
+                        <img src="data:image/jpg;base64,{image_base64_list[0]}">
+                        <img src="data:image/jpg;base64,{image_base64_list[1]}">
+                        <img src="data:image/jpg;base64,{image_base64_list[2]}">
+                        <img src="data:image/jpg;base64,{image_base64_list[3]}">
+                    </div>
+                    <div class="column">
+                        <img src="data:image/jpg;base64,{image_base64_list[4]}">
+                        <img src="data:image/jpg;base64,{image_base64_list[5]}">
+                        <img src="data:image/jpg;base64,{image_base64_list[6]}">
+                        <img src="data:image/jpg;base64,{image_base64_list[7]}">
+                    </div>
+                    <div class="column">
+                        <img src="data:image/jpg;base64,{image_base64_list[8]}">
+                        <img src="data:image/jpg;base64,{image_base64_list[9]}">
+                        <img src="data:image/jpg;base64,{image_base64_list[10]}">
+                        <img src="data:image/jpg;base64,{image_base64_list[11]}">
+                    </div>
+                </div>
             </div>
         </div>
         """
