@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 
-# Librairie principale pour l'application python3
 import streamlit as st
-# Librairie pour le menu de pages à gauche de l'application
+import base64
 from streamlit_option_menu import option_menu
-# Librairie pour intéragir avec MongoDB
+from PIL import Image
+from io import BytesIO
+import random
+import glob
 import pymongo
 import plotly.express as px
+from pathlib import Path
+
 import pandas as pd
 import numpy as np
 
@@ -88,6 +92,34 @@ with st.sidebar:
 
 # Traitement de la page Accueil
 if page == "Accueil":
+    
+    def create_collage(image_paths, width=250, height=350):
+        images = [Image.open(img).resize((width, height)) for img in image_paths[:12]]
+        final_width = width * 3 + 30
+        final_height = height * 4 + 40
+        collage = Image.new("RGB", (final_width, final_height), (0, 0, 0))
+
+        x_offset, y_offset = 10, 10
+        for i, img in enumerate(images):
+            col = i % 3
+            row = i // 3
+            x_random = random.randint(-10, 10)
+            y_random = random.randint(-10, 10)
+            x = col * (width + 10) + x_offset + x_random
+            y = row * (height + 10) + y_offset + y_random
+            collage.paste(img, (x, y))
+        
+        return collage
+    
+    def get_base64_from_image(image):
+        buffered = BytesIO()
+        image.save(buffered, format="JPEG")
+        return base64.b64encode(buffered.getvalue()).decode()
+
+    image_paths = glob.glob("/home/guesdon/Documents/myprojet/cover/*.jpg")
+    if len(image_paths) >= 12:
+        collage_image = create_collage(image_paths)
+        base64_image = get_base64_from_image(collage_image)
     st.markdown(
     """
     <style>
@@ -112,10 +144,29 @@ if page == "Accueil":
     </style>
     """,
     unsafe_allow_html=True)
-    st.title("Show Movies")
-    st.write("🎬 Bienvenue dans l'univers du cinémasrduygubiokpl,jfoiboubfip    ezf$opnfzegnoezgnzeofnezonzoznfoiznoifnzo")
-    st.write("Profitez d'une interface immersive avec une visualisation des données cinéma ! 🍿")
+    
+    # Premier bloc (Titre et Introduction)
+    st.markdown(
+    """
+    <div class="header">
+        <h1>🎬 Bienvenue sur Movies Data Visualization</h1>
+        <p>Explorez et analysez les films à travers des données interactives issues de MongoDB et Neo4j. 
+        Découvrez les tendances du box-office, les classements, les genres les plus populaires et bien plus encore !</p>
+    </div>
+    """,
+    unsafe_allow_html=True)
 
+    # Deuxième bloc (Affiches + Texte explicatif)
+    st.markdown(
+    """
+    <style>
+    .stApp {{
+        background: url('data:image/jpg;base64,{base64_image}') no-repeat center center fixed;
+        background-size: cover;
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True)
 
 
 # Traitement de la page Recherche de Films
