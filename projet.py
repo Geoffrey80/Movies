@@ -5,14 +5,23 @@ import base64
 from streamlit_option_menu import option_menu
 from PIL import Image
 from io import BytesIO
+import json
+from neo4j import GraphDatabase
+from py2neo import Graph
 import random
 import glob
 import pymongo
 import plotly.express as px
 from pathlib import Path
-
+from streamlit_echarts import st_echarts
 import pandas as pd
 import numpy as np
+
+
+# Ajout du nom et du logo du site dans la barre d'onglet
+# Empêche la barre menu de s'ouvrir lorsqu'on accède au site
+# Ajuste la longueur des textes sur les pages pour éviter un retour à la ligne trop rapide
+st.set_page_config(page_title="Movies", page_icon=":clapper:", layout="wide", initial_sidebar_state="collapsed")
 
 # Fonction pour établir la communication à MongoDB avec les paramètres de sécurité saisie dans le fichier qui se trouve dans  ~/<dossier_du_projet/.streamlit/secrets.toml
 def init_connection():
@@ -40,29 +49,43 @@ def remove_design_documents():
 def update_documents():
     try:
         result = db.utilisateurs.update_many(
-            {"genre": {"$exists": True}},
+            {"$or": [
+                {"genre": {"$exists": True}},
+                {"Actors": {"$exists": True}}
+            ]},
             [
                 {
-                    "$set":{
+                    "$set": {
                         "genre": {
                             "$cond": {
                                 "if": {"$isArray": "$genre"},
                                 "then": "$genre",
-                                "else" : {"$split": ["$genre", ","]}
+                                "else": {"$split": ["$genre", ","]}
+                            }
+                        },
+                        "Actors": {
+                            "$cond": {
+                                "if": {"$isArray": "$Actors"},
+                                "then": "$Actors",
+                                "else": {"$split": ["$Actors", ","]}
                             }
                         }
                     }
                 }
             ]
-        ) 
-    # En cas d'échec de la mise à jour
+        )
+    
     except Exception as e:
-        st.error(f"Errreur lors de la mise à jour : {e}")
+        st.error(f"Erreur lors de la mise à jour : {e}")
 
 # Nettoyage de la base de donnée MongoDB movies
 remove_design_documents()
 # Mise à jour des documents MongoDB movies
 update_documents()
+
+updated_movie = db.utilisateurs.find_one({"title": "Inception"})
+print(updated_movie)
+
 # Décompose la liste genre pour créer des éléments individuels
 new_genre = [{"$unwind": "$genre"},
     # Regroupe les éléments individuels entre eux | ex: l'élément "Action" va regrouper tout les fims qui ont le genre "Action"
@@ -73,10 +96,91 @@ new_genre = [{"$unwind": "$genre"},
 # c.a.d : "Elle fait une lecture d'analyse des documents" à prendre avec des pincettes
 result = db.utilisateurs.aggregate(new_genre)
 
-# Ajout du nom et du logo du site dans la barre d'onglet
-# Empêche la barre menu de s'ouvrir lorsqu'on accède au site
-# Ajuste la longueur des textes sur les pages pour éviter un retour à la ligne trop rapide
-st.set_page_config(page_title="Movies", page_icon=":clapper:", layout="wide", initial_sidebar_state="collapsed")
+# Répète l'oppération pour Actors
+# new_actor = [{"$unwind": "$Actors"},
+    # Regroupe les éléments individuels entre eux | ex: l'élément "Action" va regrouper tout les fims qui ont le genre "Action"
+  #  {"$group": {"_id": "$Actors"}}]
+#result = db.utilisateurs.aggregate(new_actor)
+
+def init_neo4j_connection():
+    neo4j_credentials = st.secrets["neo4j"]
+    uri = neo4j_credentials["uri"]
+    user = neo4j_credentials["user"]
+    password = neo4j_credentials["password"]
+    return GraphDatabase.driver(uri, auth=(user, password))
+
+# Connexion à Neo4j
+neo4j_client = init_neo4j_connection()
+session = neo4j_client.session()
+
+def clean_neo4j():
+    # Supprimer tous les films, acteurs et réalisateurs de la base Neo4j
+    clean_query = """
+    MATCH (n)
+    DETACH DELETE n
+    """
+    try:
+        session.run(clean_query)
+        print("Les anciennes données ont été supprimées de Neo4j.")
+    except Exception as e:
+        print(f"Erreur lors de la suppression des données : {e}")
+
+def import_movies_to_neo4j():
+    clean_neo4j()
+    for movie in db.utilisateurs.find():  # Parcours chaque film dans la collection MongoDB
+
+        # Vérification des valeurs manquantes ou invalides dans les champs avant de créer un nœud Film
+        movie_id = movie.get('_id', 'Unknown ID')
+        title = movie.get('title', 'Unknown Title').replace("'", "\\'")  # Échappe les apostrophes
+        year = movie.get('year', 'Unknown Year')
+        votes = movie.get('Votes', 0)  # Valeur par défaut 0 si 'Votes' est manquant
+        revenue = movie.get('Revenue (Millions)', 0)  # Valeur par défaut 0 si 'Revenue' est manquant
+
+        if revenue == "" or revenue == "NA":
+            revenue = 0
+
+        # Construction de la requête en gérant les valeurs manquantes
+        movie_query = f"""
+        MERGE (m:Film {{id: {movie_id}, title: '{title}', year: {year}, votes: {votes}, revenue: {revenue}}})
+        """
+
+        # Exécuter la requête pour créer ou mettre à jour le film
+        session.run(movie_query)
+
+        # Créer des nœuds Actor et des relations "A_JOUER" entre les films et les acteurs
+        if "Actors" in movie:  # Vérifie si des acteurs existent pour ce film
+            for actor in movie['Actors']:
+                actor = actor.replace("'", "\\'")  # Échapper les apostrophes dans le nom de l'acteur
+                actor_query = f"""
+                MATCH (m:Film {{id: {movie_id}}})
+                MERGE (a:Actor {{name: '{actor}'}})
+                MERGE (a)-[:A_JOUER]->(m)
+                """
+                session.run(actor_query)  # Exécuter la requête de l'acteur
+
+        # Créer des nœuds Realisateur et des relations "REALISE_PAR" entre le film et les réalisateurs
+        if "Director" in movie:  # Vérifie si des réalisateurs existent pour ce film
+            director = movie['Director']
+            if isinstance(director, list):  # Si plusieurs réalisateurs
+                for realisateur in director:
+                    realisateur = realisateur.replace("'", "\\'")  # Échapper les apostrophes dans le nom du réalisateur
+                    director_query = f"""
+                    MATCH (m:Film {{id: {movie_id}}})
+                    MERGE (r:Realisateur {{name: '{realisateur}'}})
+                    MERGE (m)-[:REALISE_PAR]->(r)
+                    """
+                    session.run(director_query)  # Exécuter la requête pour chaque réalisateur
+            else:  # Si un seul réalisateur
+                director = director.replace("'", "\\'")  # Échapper les apostrophes
+                director_query = f"""
+                MATCH (m:Film {{id: {movie_id}}})
+                MERGE (r:Realisateur {{name: '{director}'}})
+                MERGE (m)-[:REALISE_PAR]->(r)
+                """
+                session.run(director_query)  # Exécuter la requête pour le réalisateur
+
+# Appel de la fonction pour importer les films
+import_movies_to_neo4j()
 
 # Menu de pages à gauche de l'application
 with st.sidebar:
@@ -88,7 +192,24 @@ with st.sidebar:
             # Les icones à gauches des noms des pages
             icons=["globe", "film", "trophy", "bar-chart-line"],
             # Page par default Accueil
-            default_index=0)
+            default_index=0,
+            styles={
+            "container": {"padding": "5px", "background-color": "#1a1a1a"},  # Fond gris foncé pour le container
+            "icon": {"color": "#f1c40f", "font-size": "20px"},  # Icônes couleur or
+            "nav-link": {
+                "font-size": "18px",
+                "font-weight": "bold",
+                "color": "#ecf0f1",  # Texte couleur gris clair
+                "text-align": "left",
+                "margin": "5px",
+                "border-radius": "10px"
+                },
+                "nav-link-selected": {
+                "background-color": "#34495e",  # Fond gris plus clair pour l'élément sélectionné
+                "color": "#ecf0f1",  # Texte blanc pour l'élément sélectionné
+                },
+            }
+        )
 
 # Traitement de la page Accueil
 def get_base64_image(image_path):
@@ -133,9 +254,18 @@ if page == "Accueil":
         }
         .section2 {
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
+            justify-content: space-between;
+            margin: 30px;
         }
-
+        .text { 
+            max-width: 500px;  /* Limiter la largeur du texte */
+            padding-top: 350px;
+            font-size: 30px;  /* Augmenter la taille de la police du texte */
+            line-height: 1.6;
+            flex-grow: 1;  /* Permet au texte de s'étendre sans modifier la taille des images */
+            margin-left: 20px;
+        }
         .gallery {
             display: flex;
             justify-content: flex-start;
@@ -148,7 +278,7 @@ if page == "Accueil":
             gap: 15px;
         }
         .column img {
-            width: 200px;
+            width: 400px;
             height: auto;
             border-radius: 10px;
             box-shadow: 3px 3px 10px rgba(0, 0, 0, 0.5);
@@ -162,8 +292,7 @@ if page == "Accueil":
         """,
         unsafe_allow_html=True
     )
-
-    # Premier bloc : Titre et Introduction
+    # Premier bloc : Présentation projet
     st.markdown(
         """
         <div class="section1">
@@ -181,9 +310,9 @@ if page == "Accueil":
         unsafe_allow_html=True
     )
 
-    # Deuxième bloc : Galerie d'images (Affiches de films)
+    # Deuxième bloc : galerie de 12 images
     if len(image_paths) >= 12:
-        selected_images = image_paths[:12]  # Sélection des 12 premières images
+        selected_images = image_paths[:12] 
         image_base64_list = [get_base64_image(img) for img in selected_images]
 
         image_html = f"""
@@ -193,20 +322,28 @@ if page == "Accueil":
                     <img src="data:image/jpg;base64,{image_base64_list[0]}">
                     <img src="data:image/jpg;base64,{image_base64_list[1]}">
                     <img src="data:image/jpg;base64,{image_base64_list[2]}">
-                    <img src="data:image/jpg;base64,{image_base64_list[3]}">
                 </div>
                 <div class="column">
+                    <img src="data:image/jpg;base64,{image_base64_list[3]}">
                     <img src="data:image/jpg;base64,{image_base64_list[4]}">
                     <img src="data:image/jpg;base64,{image_base64_list[5]}">
-                    <img src="data:image/jpg;base64,{image_base64_list[6]}">
-                    <img src="data:image/jpg;base64,{image_base64_list[7]}">
                 </div>
                 <div class="column">
+                    <img src="data:image/jpg;base64,{image_base64_list[6]}">
+                    <img src="data:image/jpg;base64,{image_base64_list[7]}">
                     <img src="data:image/jpg;base64,{image_base64_list[8]}">
+                </div>
+                <div class="column">
                     <img src="data:image/jpg;base64,{image_base64_list[9]}">
                     <img src="data:image/jpg;base64,{image_base64_list[10]}">
                     <img src="data:image/jpg;base64,{image_base64_list[11]}">
                 </div>
+            </div>
+            <div class="text">
+                <h2>Les Films que vous aimez !</h2>
+                <p>Classiques ● Action ● Adventure ● Biography ● Comedy ● Horror ● Drama ● Fantasy ● Science-Fiction ● Western
+                ● Family ● Mystery ● War ● History ● Romance ● Thriller ● Crime ● Music ● Animation
+                </p>
             </div>
         </div>
         """
@@ -217,8 +354,32 @@ if page == "Accueil":
 
 # Traitement de la page Recherche de Films
 elif page == "Recherche de Films":
+    st.markdown(
+        """
+        <style>
+        /* Appliquer un fond sombre pour un effet cinéma */
+        .stApp {
+            background: #E0CDA9;
+            color: black;
+            text-align: start;
+        } 
+        header[data-testid="stHeader"]::before {
+            content: "";
+            background: #E0CDA9;
+            height: 100%;
+            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
     st.title("Recherche de Films par Années !")
-    
+   
     # Filtre les films par année
     year = db.utilisateurs.distinct("year")
     # Trie les années par ordre décroissant grâce au reverse
@@ -382,6 +543,7 @@ elif page == "Recherche de Films":
     else:
         st.write("Aucun film trouvé pour cette année.")
 
+# Page de Classsement
 elif page == "Classement":
     st.title("TOP 3 des Films les mieux notés !")
 
@@ -408,7 +570,129 @@ elif page == "Classement":
     else:
         st.write("Les films n'ont pas été notés !")
 
+    # Création du Graphique dynamique via Neo4j
+    query = """
+    MATCH (m:Film)-[:A_JOUER]->(a:Actor)
+    MATCH (m)-[:REALISE_PAR]->(r:Realisateur)
+    RETURN m, a, r
+    """
+   
+    # Récupérer les résultats de la requête
+    neo4j_session = session.run(query)
+    
+    # Initialisation des nœuds et des liens
+    nodes = []
+    links = []
+    categories = [{"name": "Film"}, {"name": "Actor"}, {"name": "Realisateur"}]
+    print("Nodes:", nodes)
+    print("Links:", links)
+
+    # Dictionnaires pour éviter les doublons
+    movie_nodes = {}
+    actor_nodes = {}
+    director_nodes = {}
+
+    # Traitement des résultats
+    for result in neo4j_session:
+        movie = result["m"]
+        print("movie:", result)
+        actor = result["a"]
+        director = result["r"]
+
+        # Ajouter les nœuds pour les films
+        if movie["title"] not in movie_nodes:
+            movie_nodes[movie["title"]] = {
+                "name": movie["title"],
+                "symbolSize": 50,
+                "category": 0,
+            }
+            nodes.append(movie_nodes[movie["title"]])
+
+        # Ajouter les nœuds pour les acteurs
+        if actor["name"] not in actor_nodes:
+            actor_nodes[actor["name"]] = {
+                "name": actor["name"],
+                "symbolSize": 30,
+                "category": 1,
+            }
+            nodes.append(actor_nodes[actor["name"]])
+
+        # Ajouter les nœuds pour les réalisateurs
+        if director["name"] not in director_nodes:
+            director_nodes[director["name"]] = {
+                "name": director["name"],
+                "symbolSize": 30,
+                "category": 2,
+            }
+            nodes.append(director_nodes[director["name"]])
+
+        # Ajouter les liens entre les films, acteurs et réalisateurs
+        links.append({
+            "source": movie["title"],
+            "target": actor["name"],
+            "value": "A_JOUER"
+        })
+        links.append({
+            "source": movie["title"],
+            "target": director["name"],
+            "value": "REALISE_PAR"
+        })
+
+    # Préparer la configuration pour ECharts
+    option = {
+        "title": {
+            "text": "Films, Acteurs et Réalisateurs",
+            "subtext": "Graphique interactif des relations",
+            "top": "bottom",
+            "left": "right",
+        },
+        "tooltip": {},
+        "legend": [{"data": [a["name"] for a in categories]}],
+        "animationDuration": 1500,
+        "animationEasingUpdate": "quinticInOut",
+        "series": [
+            {
+                "name": "Films, Acteurs et Réalisateurs",
+                "type": "graph",
+                "layout": "force",
+                "data": nodes,
+                "links": links,
+                "categories": categories,
+                "roam": True,
+                "label": {"position": "right", "formatter": "{b}"},
+                "lineStyle": {"color": "source", "curveness": 0.3},
+                "emphasis": {"focus": "adjacency", "lineStyle": {"width": 10}},
+            }
+        ],
+    }
+
+    # Afficher le graphique avec Streamlit
+    st_echarts(option, height="500px")
+
+# Page Analyse
 elif page == "Analyse":
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background: #E0CDA9;
+            color: black;
+            text-align: start;
+        }
+        header[data-testid="stHeader"]::before {
+            content: "";
+            background: #E0CDA9;
+            height: 100%;
+            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
    
     # Première Partie : les meilleurs revenue en fonction du genre et de l'année
 
@@ -444,7 +728,7 @@ elif page == "Analyse":
     # Affichage du tableau
     st.write("Observation des Résultats: Les revenus sont exprimés en millions de dollars américains.")
     st.write(df_ordre)
-    st.markdown("<hr style='border: 1px solid #CCCCCC;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='border: 1px solid #CCCCCC; color: black'>", unsafe_allow_html=True)
 
 ###################### Deuxième Partie : Relation entre la Durée des Film et leur revenue ###############
 
