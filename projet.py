@@ -9,6 +9,7 @@ import json
 from neo4j import GraphDatabase
 import random
 import glob
+import os
 import pymongo
 import plotly.express as px
 from pathlib import Path
@@ -210,7 +211,7 @@ def get_base64_image(image_path):
 if page == "Accueil":
 
     # Charger les images depuis le dossier
-    image_paths = glob.glob("/home/guesdon/Documents/myprojet/cover/*.jpg")
+    image_paths = glob.glob(os.path.expanduser("~/Movies/cover/*.jpg"))
     # CSS Global pour la mise en page et le style
     st.markdown(
         """

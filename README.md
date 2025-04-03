@@ -57,6 +57,7 @@ pour le bon fonctionnement de l'application je prie d'utiliser le même de colle
 commande en Linux:
 `mongoimport --uri="mongodb://user:root@localhost:27017/movies?authSource=admin" --collection=utilisateurs --file=movies.jsoni`
 
+**Obliger de lancer Neo4j avant l'application comme on est en local**
 Le dossier `cover` regroupe l'ensemble des images utilisé dans l'application.
 
 # Dépendances
@@ -110,3 +111,4 @@ Les bibliothèques suivantes font partie de Python et n'ont pas besoin d'être i
 - **random** : Génère des nombres aléatoires.
 - **glob** : Utilisé pour trouver tous les fichiers qui correspondent à un modèle de chemin donné.
 - **pathlib** : Fournit une interface orientée objet pour manipuler les chemins de fichiers.
+- **os** : pour utiliser le chemin courant avec ~ indispensable pour vous échanger avec vous sur github sans prendre en compte mes propres paramètres
