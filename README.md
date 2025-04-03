@@ -9,6 +9,10 @@ L'interface est facile à utiliser grâce à un menu déroulant situé en `haut 
 
 Il y a **trois pages principales** avec des fonctionnalités distinctes :
 
+Lancer le projet : `streamlit run projet.py` <br>
+
+(ne pas oublier de lancer neo4j avant)
+
 ## 1. Recherche de Films
 
 Sur cette page, vous pouvez affiner vos recherches en sélectionnant les films selon plusieurs critères :
@@ -52,12 +56,12 @@ Les codes et tout les informations de connexion se trouve dans le dossier `.stre
 de connexions pour les deux bases de données, il est très important de vérifier sinon les bases de données ne pourront jamais communiquer.
 
 De plus, le fichier `movies.json` doit être obligatoirement renseigné dans votre base de donnée MongoDB, aussi tout les commandes ont été fait avec pour nom de collection utilisateurs,
-pour le bon fonctionnement de l'application je prie d'utiliser le même de collection dans de l'importation sur mongodb.
+pour le bon fonctionnement de l'application je prie d'utiliser le même nom de collection dans l'importation sur mongodb.
 
 commande en Linux:
 `mongoimport --uri="mongodb://user:root@localhost:27017/movies?authSource=admin" --collection=utilisateurs --file=movies.jsoni`
 
-**Obliger de lancer Neo4j avant l'application comme on est en local**
+**Obliger de lancer Neo4j avant l'application comme on est en local**<br>
 Le dossier `cover` regroupe l'ensemble des images utilisé dans l'application.
 
 # Dépendances
