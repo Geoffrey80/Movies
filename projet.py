@@ -535,107 +535,83 @@ elif page == "Recherche de Films":
 
 # Page de Classsement
 elif page == "Classement":
-    st.title("TOP 3 des Films les mieux notés !")
 
-    # Récupérer les films avec une note et les trier pour obtenir le top 3
-    classement = db.utilisateurs.find({"rating": {"$ne": "unrated"}})
-    top_3 = list(classement.sort([("rating", pymongo.DESCENDING), ("Votes", pymongo.DESCENDING)]).limit(3))
+    st.markdown(
+        """
+        <style>
+        /* Appliquer un fond sombre pour un effet cinéma */
+        .stApp {
+            background: white;
+            color: black;
+            text-align: start;
+        }
+        header[data-testid="stHeader"]::before {
+            content: "";
+            background: #000000;
+            height: 100%;
+            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
 
-    if len(top_3) > 0:
-        # Utiliser st.columns pour afficher les films côte à côte
-        cols = st.columns(3)  # Créer 3 colonnes pour les 3 films
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
-        for i, top in enumerate(top_3):
-            with cols[i]:
-                st.markdown(f"""
-                <br>
-                <div style="background-color: #f0f0f0; padding: 20px; border-radius: 50%; width: 180px; height: 180px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);">
-                    <strong>{i+1}.{top["title"]}</strong>
-                    <small>Rating: {top["rating"]}</small>
-                    <small>Votes: {top["Votes"]}</small>
-                </div>
-                <br>
-                """, unsafe_allow_html=True)
-
-    else:
-        st.write("Les films n'ont pas été notés !")
-    
-    # Exécuter la requête Neo4j pour récupérer les films, acteurs et réalisateurs
+    st.title("Graphique des relations dans la base Neo4j")
+        
+    # Exécuter la requête Neo4j pour récupérer toutes les relations
     query = """
-    MATCH p=()-[:A_JOUER|REALISE_PAR]->() 
+    MATCH p=()-[]->() 
     RETURN p;
     """
-
     results = session.run(query)
 
+    # Initialisation des structures de stockage
     nodes = []
     links = []
-    categories = [{"name": "Film"}, {"name": "Actor"}, {"name": "Realisateur"}]
-    # Dictionnaires pour stocker les nœuds afin d'éviter les doublons
-    movie_nodes = {}
-    actor_nodes = {}
-    director_nodes = {}
+    categories = []
+    node_dict = {}  # Dictionnaire pour stocker les nœuds uniques
+    category_dict = {}  # Dictionnaire pour stocker les catégories dynamiquement
 
     # Traiter les résultats
     for record in results:
-        # Récupérer la relation et les nœuds impliqués
-        rel = record["p"].relationships[0]  # Prendre la première relation
-        movie = rel.start_node if "Film" in rel.start_node.labels else rel.end_node
-        person = rel.end_node if movie == rel.start_node else rel.start_node
+        # Récupérer tous les nœuds et relations impliqués dans le chemin
+        for rel in record["p"].relationships:
+            start_node = rel.start_node
+            end_node = rel.end_node
+            relation_type = rel.type  # Type de relation (ex: A_JOUER, REALISE_PAR, etc.)
 
-        # Ajouter le film
-        if movie["title"] not in movie_nodes:
-            movie_nodes[movie["title"]] = {
-                "name": movie["title"],
-                "symbolSize": 50,
-                "category": 0,  # Films ont la catégorie 0
-            }
-            nodes.append(movie_nodes[movie["title"]])
+            # Ajouter le type de nœud à category_dict s'il n'existe pas
+            for node in [start_node, end_node]:
+                node_label = list(node.labels)[0]  # Prendre la première étiquette du nœud
+                if node_label not in category_dict:
+                    category_dict[node_label] = len(category_dict)
+                    categories.append({"name": node_label})
 
-        # Vérifier si c'est un acteur ou un réalisateur et ajouter
-        if "Actor" in person.labels:
-            if person["name"] not in actor_nodes:
-                actor_nodes[person["name"]] = {
-                    "name": person["name"],
-                    "symbolSize": 30,
-                    "category": 1,  # Acteurs ont la catégorie 1
-                }
-                nodes.append(actor_nodes[person["name"]])
+                # Ajouter le nœud dans node_dict s'il n'existe pas encore
+                node_id = node["name"] if "name" in node else node["title"]
+                if node_id not in node_dict:
+                    node_dict[node_id] = {
+                        "name": node_id,
+                        "symbolSize": 40 if node_label == "Film" else 30,
+                        "category": category_dict[node_label],  # Assigner la catégorie dynamiquement
+                    }
+                    nodes.append(node_dict[node_id])
 
-            # Ajouter le lien acteur-film
+            # Ajouter la relation dans links
             links.append({
-                "source": person["name"],
-                "target": movie["title"],
-                "value": "A_JOUER"
+                "source": start_node["name"] if "name" in start_node else start_node["title"],
+                "target": end_node["name"] if "name" in end_node else end_node["title"],
+                "value": relation_type  # Nom de la relation
             })
 
-        elif "Realisateur" in person.labels:
-            if person["name"] not in director_nodes:
-                director_nodes[person["name"]] = {
-                    "name": person["name"],
-                    "symbolSize": 30,
-                    "category": 2,  # Réalisateurs ont la catégorie 2
-                }
-                nodes.append(director_nodes[person["name"]])
-
-            # Ajouter le lien réalisateur-film
-            links.append({
-                "source": person["name"],
-                "target": movie["title"],
-                "value": "REALISE_PAR"
-            })
- 
     # Préparer la configuration pour ECharts
     option = {
-        "title": {
-            "text": "Films, Acteurs et Réalisateurs",
-            "subtext": "Graphique interactif des relations",
-            "top": "bottom",
-            "left": "right",
-            "textStyle": {"fontSize": 16, "fontWeight": "bold"},
-        },
         "tooltip": {
-            "show": True, 
+            "show": True,
             "formatter": "{b}"  # Affiche uniquement le nom de l'élément sous la souris
         },
         "legend": [
@@ -649,7 +625,7 @@ elif page == "Classement":
         "animationEasingUpdate": "quinticInOut",
         "series": [
             {
-                "name": "Films, Acteurs et Réalisateurs",
+                "name": "Entités et Relations",
                 "type": "graph",
                 "layout": "force",  # Utilise le layout "force" pour gérer les positions des nœuds
                 "force": {
@@ -658,28 +634,72 @@ elif page == "Classement":
                 },
                 "data": nodes,  # Liste des nœuds récupérés
                 "links": links,  # Liste des liens récupérés
-                "categories": categories,  # Catégories pour les nœuds (Films, Acteurs, Réalisateurs)
+                "categories": categories,  # Catégories détectées dynamiquement
                 "roam": True,  # Permet de déplacer le graphique et d'utiliser le zoom
                 "label": {
                     "show": True,
-                    "position": "right",  # Position des étiquettes des nœuds
-                    "formatter": "{b}",  # Affiche le nom de l'élément dans l'étiquette
-                    "fontSize": 12,  # Taille de la police
+                    "position": "right",
+                    "formatter": "{b}",
+                    "fontSize": 12,
                 },
                 "lineStyle": {
-                    "color": "source",  # La couleur des liens dépend du nœud source
-                    "curveness": 0.2,  # Courbure des liens pour un meilleur rendu visuel
-                    "opacity": 0.8,  # Opacité des liens
+                    "color": "source",
+                    "curveness": 0.2,
+                    "opacity": 0.8,
                 },
                 "emphasis": {
-                    "focus": "adjacency",  # Met l'accent sur les voisins adjacents lors du survol
-                    "lineStyle": {"width": 2},  # Augmente l'épaisseur des liens lors du survol
-                    "label": {"fontSize": 14, "fontWeight": "bold"},  # Modifie l'apparence des étiquettes lors du survol
+                    "focus": "adjacency",
+                    "lineStyle": {"width": 2},
+                    "label": {"fontSize": 14, "fontWeight": "bold"},
                 },
-                "symbolSize": 10,  # Taille des symboles des nœuds
+                "symbolSize": 10,
             }
         ],
     }
+
+    # Afficher le graphique avec Streamlit
+    st_echarts(option, height="1000px")
+
+    st.markdown("<hr style='border: 1px solid #CCCCCC; color: black'>", unsafe_allow_html=True)
+    st.write("TOP 3 des Films les mieux notés !")
+
+    # Récupérer les films avec une note et les trier pour obtenir le top 3
+    classement = db.utilisateurs.find({"rating": {"$ne": "unrated"}})
+    top_3 = list(classement.sort([("rating", pymongo.DESCENDING), ("Votes", pymongo.DESCENDING)]).limit(3))
+
+    if len(top_3) > 0:
+    # Utiliser st.columns pour afficher les films côte à côte
+        cols = st.columns(3)  # Créer 3 colonnes pour les 3 films
+
+        for i, top in enumerate(top_3):
+        # Définir la couleur selon la position
+            if i == 0:
+                color = "#FFD700"  # Or
+            elif i == 1:
+                color = "#C0C0C0"  # Argent
+            else:
+                color = "#CD7F32"  # Bronze
+
+            with cols[i]:
+                st.markdown(f"""
+                <br>
+                <div style="background-color: {color}; 
+                    padding: 20px; 
+                    border-radius: 50%; 
+                    width: 180px; 
+                    height: 180px; 
+                    display: flex; 
+                    flex-direction: 
+                    column; justify-content: center; 
+                    align-items: center; 
+                    text-align: center; 
+                    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);">
+                    <strong>{i+1}. {top["title"]}</strong>
+                    <small>Rating: {top["rating"]}</small>
+                    <small>Votes: {top["Votes"]}</small>
+                </div>
+                <br>
+                """, unsafe_allow_html=True)
 
 # Page Analyse
 elif page == "Analyse":
@@ -790,3 +810,4 @@ elif page == "Analyse":
 
     # Affichage du camembert dans Streamlit
     st.plotly_chart(fig)
+
