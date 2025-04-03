@@ -7,7 +7,6 @@ from PIL import Image
 from io import BytesIO
 import json
 from neo4j import GraphDatabase
-from py2neo import Graph
 import random
 import glob
 import pymongo
@@ -83,9 +82,6 @@ remove_design_documents()
 # Mise à jour des documents MongoDB movies
 update_documents()
 
-updated_movie = db.utilisateurs.find_one({"title": "Inception"})
-print(updated_movie)
-
 # Décompose la liste genre pour créer des éléments individuels
 new_genre = [{"$unwind": "$genre"},
     # Regroupe les éléments individuels entre eux | ex: l'élément "Action" va regrouper tout les fims qui ont le genre "Action"
@@ -95,12 +91,6 @@ new_genre = [{"$unwind": "$genre"},
 # Attention en aucun cas elle met à jour la base de donnée
 # c.a.d : "Elle fait une lecture d'analyse des documents" à prendre avec des pincettes
 result = db.utilisateurs.aggregate(new_genre)
-
-# Répète l'oppération pour Actors
-# new_actor = [{"$unwind": "$Actors"},
-    # Regroupe les éléments individuels entre eux | ex: l'élément "Action" va regrouper tout les fims qui ont le genre "Action"
-  #  {"$group": {"_id": "$Actors"}}]
-#result = db.utilisateurs.aggregate(new_actor)
 
 def init_neo4j_connection():
     neo4j_credentials = st.secrets["neo4j"]
@@ -569,75 +559,72 @@ elif page == "Classement":
 
     else:
         st.write("Les films n'ont pas été notés !")
-
-    # Création du Graphique dynamique via Neo4j
-    query = """
-    MATCH (m:Film)-[:A_JOUER]->(a:Actor)
-    MATCH (m)-[:REALISE_PAR]->(r:Realisateur)
-    RETURN m, a, r
-    """
-   
-    # Récupérer les résultats de la requête
-    neo4j_session = session.run(query)
     
-    # Initialisation des nœuds et des liens
+    # Exécuter la requête Neo4j pour récupérer les films, acteurs et réalisateurs
+    query = """
+    MATCH p=()-[:A_JOUER|REALISE_PAR]->() 
+    RETURN p;
+    """
+
+    results = session.run(query)
+
     nodes = []
     links = []
     categories = [{"name": "Film"}, {"name": "Actor"}, {"name": "Realisateur"}]
-    print("Nodes:", nodes)
-    print("Links:", links)
-
-    # Dictionnaires pour éviter les doublons
+    # Dictionnaires pour stocker les nœuds afin d'éviter les doublons
     movie_nodes = {}
     actor_nodes = {}
     director_nodes = {}
 
-    # Traitement des résultats
-    for result in neo4j_session:
-        movie = result["m"]
-        print("movie:", result)
-        actor = result["a"]
-        director = result["r"]
+    # Traiter les résultats
+    for record in results:
+        # Récupérer la relation et les nœuds impliqués
+        rel = record["p"].relationships[0]  # Prendre la première relation
+        movie = rel.start_node if "Film" in rel.start_node.labels else rel.end_node
+        person = rel.end_node if movie == rel.start_node else rel.start_node
 
-        # Ajouter les nœuds pour les films
+        # Ajouter le film
         if movie["title"] not in movie_nodes:
             movie_nodes[movie["title"]] = {
                 "name": movie["title"],
                 "symbolSize": 50,
-                "category": 0,
+                "category": 0,  # Films ont la catégorie 0
             }
             nodes.append(movie_nodes[movie["title"]])
 
-        # Ajouter les nœuds pour les acteurs
-        if actor["name"] not in actor_nodes:
-            actor_nodes[actor["name"]] = {
-                "name": actor["name"],
-                "symbolSize": 30,
-                "category": 1,
-            }
-            nodes.append(actor_nodes[actor["name"]])
+        # Vérifier si c'est un acteur ou un réalisateur et ajouter
+        if "Actor" in person.labels:
+            if person["name"] not in actor_nodes:
+                actor_nodes[person["name"]] = {
+                    "name": person["name"],
+                    "symbolSize": 30,
+                    "category": 1,  # Acteurs ont la catégorie 1
+                }
+                nodes.append(actor_nodes[person["name"]])
 
-        # Ajouter les nœuds pour les réalisateurs
-        if director["name"] not in director_nodes:
-            director_nodes[director["name"]] = {
-                "name": director["name"],
-                "symbolSize": 30,
-                "category": 2,
-            }
-            nodes.append(director_nodes[director["name"]])
+            # Ajouter le lien acteur-film
+            links.append({
+                "source": person["name"],
+                "target": movie["title"],
+                "value": "A_JOUER"
+            })
 
-        # Ajouter les liens entre les films, acteurs et réalisateurs
-        links.append({
-            "source": movie["title"],
-            "target": actor["name"],
-            "value": "A_JOUER"
-        })
-        links.append({
-            "source": movie["title"],
-            "target": director["name"],
-            "value": "REALISE_PAR"
-        })
+        elif "Realisateur" in person.labels:
+            if person["name"] not in director_nodes:
+                director_nodes[person["name"]] = {
+                    "name": person["name"],
+                    "symbolSize": 30,
+                    "category": 2,  # Réalisateurs ont la catégorie 2
+                }
+                nodes.append(director_nodes[person["name"]])
 
+            # Ajouter le lien réalisateur-film
+            links.append({
+                "source": person["name"],
+                "target": movie["title"],
+                "value": "REALISE_PAR"
+            })
+ 
     # Préparer la configuration pour ECharts
     option = {
         "title": {
@@ -645,29 +632,54 @@ elif page == "Classement":
             "subtext": "Graphique interactif des relations",
             "top": "bottom",
             "left": "right",
+            "textStyle": {"fontSize": 16, "fontWeight": "bold"},
         },
-        "tooltip": {},
-        "legend": [{"data": [a["name"] for a in categories]}],
-        "animationDuration": 1500,
+        "tooltip": {
+            "show": True, 
+            "formatter": "{b}"  # Affiche uniquement le nom de l'élément sous la souris
+        },
+        "legend": [
+            {
+                "data": [category["name"] for category in categories],
+                "selectedMode": "multiple",
+                "textStyle": {"fontSize": 12},
+            }
+        ],
+        "animationDuration": 2000,
         "animationEasingUpdate": "quinticInOut",
         "series": [
             {
                 "name": "Films, Acteurs et Réalisateurs",
                 "type": "graph",
-                "layout": "force",
-                "data": nodes,
-                "links": links,
-                "categories": categories,
-                "roam": True,
-                "label": {"position": "right", "formatter": "{b}"},
-                "lineStyle": {"color": "source", "curveness": 0.3},
-                "emphasis": {"focus": "adjacency", "lineStyle": {"width": 10}},
+                "layout": "force",  # Utilise le layout "force" pour gérer les positions des nœuds
+                "force": {
+                    "repulsion": 250,  # Augmente la distance entre les nœuds
+                    "edgeLength": [50, 200],  # Ajuste la longueur des liens
+                },
+                "data": nodes,  # Liste des nœuds récupérés
+                "links": links,  # Liste des liens récupérés
+                "categories": categories,  # Catégories pour les nœuds (Films, Acteurs, Réalisateurs)
+                "roam": True,  # Permet de déplacer le graphique et d'utiliser le zoom
+                "label": {
+                    "show": True,
+                    "position": "right",  # Position des étiquettes des nœuds
+                    "formatter": "{b}",  # Affiche le nom de l'élément dans l'étiquette
+                    "fontSize": 12,  # Taille de la police
+                },
+                "lineStyle": {
+                    "color": "source",  # La couleur des liens dépend du nœud source
+                    "curveness": 0.2,  # Courbure des liens pour un meilleur rendu visuel
+                    "opacity": 0.8,  # Opacité des liens
+                },
+                "emphasis": {
+                    "focus": "adjacency",  # Met l'accent sur les voisins adjacents lors du survol
+                    "lineStyle": {"width": 2},  # Augmente l'épaisseur des liens lors du survol
+                    "label": {"fontSize": 14, "fontWeight": "bold"},  # Modifie l'apparence des étiquettes lors du survol
+                },
+                "symbolSize": 10,  # Taille des symboles des nœuds
             }
         ],
     }
-
-    # Afficher le graphique avec Streamlit
-    st_echarts(option, height="500px")
 
 # Page Analyse
 elif page == "Analyse":
